@@ -160,6 +160,9 @@ check_models <- sapply(models,function(x){summary(x)$r.square})
 
 #Predict
 xtest <- cbind(1,x.qpca[[1]]$X[!sel,])
-rlt <- xtest %*% cbind(coef(models[[1]]))
+rlt <- data.frame(Id=rownames(raw)[!sel],SalePrice=xtest %*% cbind(coef(models[[1]])))
+
+#Output
+write.csv(rlt,file='rlt.csv',row.names=F)
 
 
