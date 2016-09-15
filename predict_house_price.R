@@ -148,14 +148,18 @@ x_sep <- do.call(cbind,x_sep)
 x_sep <- sapply(1:ncol(x_sep),function(i){scale0(as.numeric(paste(x_sep[,i])),T,F)})
 x_mc <- mc0(x_sep,ifprint=TRUE)
 x_f <- functional_transform(x_mc$Z)
-x <- x_f[sel,]
+x.qpca <- lapply((0:19)/20,function(l){qpca(x_f,l)})
 
 #####################################################
 # Modeling
 #####################################################
 
-models <- lapply((0:19)/20,function(l){
-  x.qpca <- qpca(x,l)
-  x.lm <- lm(y~x.qpca$X)
-})
+#Train
+models <- lapply(x.qpca,function(x){lm(y~x$X[sel,])})
+check_models <- sapply(models,function(x){summary(x)$r.square})
+
+#Predict
+xtest <- cbind(1,x.qpca[[1]]$X[!sel,])
+rlt <- xtest %*% cbind(coef(models[[1]]))
+
 
