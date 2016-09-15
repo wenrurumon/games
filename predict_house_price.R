@@ -158,11 +158,23 @@ x.qpca <- lapply((0:19)/20,function(l){qpca(x_f,l)})
 models <- lapply(x.qpca,function(x){lm(y~x$X[sel,])})
 check_models <- sapply(models,function(x){summary(x)$r.square})
 
+x2 <- x.qpca[[1]]$X[,1:which(x.qpca[[1]]$prop>0.99)[1],drop=F]
+summary(x2.lm <- lm(log(y)~x2[sel,]))
+res <- pnorm(scale(predict(x2.lm)/y-1))
+respos <- c(res>0.95);resneg <- c(res<0.05)
+
+x2 <- cbind(x.qpca[[1]]$X[sel,],respos=respos,neg=resneg)
+summary(x2.lm2 <- lm(log(y)~x2))
+plot.ts(y);lines(exp(predict(x2.lm2)),col=2)
+qqplot(y,exp(predict(x2.lm)))
+
 #Predict
-xtest <- cbind(1,x.qpca[[1]]$X[!sel,])
-rlt <- data.frame(Id=rownames(raw)[!sel],SalePrice=xtest %*% cbind(coef(models[[1]])))
+xtest <- cbind(1,x.qpca[[1]]$X[!sel,],0,0)
+xcoef <- cbind(coef(x2.lm2))
+ytest <- exp(xtest %*% xcoef)
+rlt <- data.frame(Id=rownames(raw)[!sel],SalePrice=ytest)
 
 #Output
-write.csv(rlt,file='rlt.csv',row.names=F)
+write.csv(rlt,file='rlt20160914_4.csv',row.names=F)
 
 
