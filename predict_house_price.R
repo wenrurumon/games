@@ -4,13 +4,15 @@
 #####################################################
 
 #Robust Recovery
-
-scale0 <- function(x){
-  x <- pnorm(scale(x))
+scale0 <- function(x,to01=T,p=F){
+  if(p){x <- pnorm(scale(x))}
+  if(to01){
+    x <- x-min(x,na.rm=TRUE)
+    x <- x/max(x,na.rm=TRUE)
+  }
   x[is.na(x)] <- 0.5
-  x
+  as.numeric(x)
 }
-
 mc0 <- function(X,lambda=0.2,ifprint=FALSE){
   ### input the initial values
   m <- dim(X)[1]
@@ -52,8 +54,60 @@ mc0 <- function(X,lambda=0.2,ifprint=FALSE){
     mu <- min(rho*mu,mu_max)
   }
   #rlt <- A
-  rlt <- list(score=A,prop=cumsum(svd(X-E)$d/sum(svd(X-E)$d)))
+  rlt <- list(Z = A%*%Z, X=A, Y=Z ,prop=cumsum(svd(X-E)$d/sum(svd(X-E)$d)))
   return(rlt)  
+}
+#QPCA
+qpca <- function(A,lambda=0,ifscale=TRUE){
+  if(ifscale){
+    A <- scale(as.matrix(A))
+    A[is.na(A)] <- 0
+  }else{
+    A <- as.matrix(A)
+  }
+  A.svd <- svd(A)
+  d <- A.svd$d-lambda*A.svd$d[1]
+  d <- d[d > 1e-8]
+  r <- length(d)
+  prop <- d^2; info <- sum(prop)/sum(A.svd$d^2);prop <- cumsum(prop/sum(prop))
+  d <- diag(d,length(d),length(d))
+  u <- A.svd$u[,1:r,drop=F]
+  v <- A.svd$v[,1:r,drop=F]
+  x <- u%*%sqrt(d)
+  y <- sqrt(d)%*%t(v)
+  z <- x %*% y
+  list(rank=r,X=x,Y=y,Z=x%*%y,prop=prop,info=info)
+}
+#PCA
+pca <- function(X){
+  X <- scale(as.matrix(X))
+  m = nrow(X)
+  n = ncol(X)
+  X = scale(X)
+  Xeigen <- svd(as.matrix(X))
+  value <- (Xeigen$d)^2/m
+  value <- cumsum(value/sum(value))
+  score <- X %*% Xeigen$v
+  mat <- Xeigen$v
+  list(score=score,prop=value,mat=mat)
+}
+#Functional Variable Remodeling
+library(fda)
+library(flare)
+functional_transform <- function(X){
+  #calculate the distance for each variables
+  X.dist <- dist(t(X))
+  pos <- hclust(X.dist)$order
+  X <- X[,pos]
+  X.dist <- as.matrix(X.dist)[pos,pos]
+  pos <- c(0,cumsum(diag(X.dist[-1,-length(pos)])))
+  pos <- scale0(pos,T,T)
+  #set fourier basis
+  fbasis<-create.fourier.basis(c(0,1),nbasis=length(pos)*2-1)
+  fphi <- eval.basis(pos,fbasis)
+  fcoef <- ginv(t(fphi)%*%fphi)%*%t(fphi)%*%t(X)
+  rlt <- t(fcoef-rowMeans(fcoef))/sqrt(nrow(X))
+  return(rlt)
 }
 
 #####################################################
@@ -61,21 +115,21 @@ mc0 <- function(X,lambda=0.2,ifprint=FALSE){
 #####################################################
 
 #Load data
-
 setwd('C:\\Users\\zhu2\\Documents\\kaggle\\hprice')
 raw <- read.csv('full.csv',row.names=1)
 colnames(raw)
-train <- raw[raw$SalePrice!='tbd',]
+sel <- raw$SalePrice!='tbd'
+train <- raw[sel,]
 y <- train$SalePrice <- as.numeric(paste(train$SalePrice ))
 
 #Preview Data
-
 test <- function(i){
   summary(lm(y~train[,i]))$r.square
 }
 test <- sapply(2:ncol(train)-1,function(i){test(i)})
 hist(test)
 
+#Matrix Completion Process
 trans <- function(x){
   out <- outer(x,unique(x),'==')+0
   colnames(out) <- unique(x)
@@ -89,6 +143,19 @@ x_sep <- lapply(2:ncol(raw)-1,function(i){
   }
 })
 
-x_full <- scale0(do.call(cbind,x_sep))
-x_mc <- mc(x_full,ifprint=TRUE)
+#Generate Data
+x_sep <- do.call(cbind,x_sep)
+x_sep <- sapply(1:ncol(x_sep),function(i){scale0(as.numeric(paste(x_sep[,i])),T,F)})
+x_mc <- mc0(x_sep,ifprint=TRUE)
+x_f <- functional_transform(x_mc$Z)
+x <- x_f[sel,]
+
+#####################################################
+# Modeling
+#####################################################
+
+models <- lapply((0:19)/20,function(l){
+  x.qpca <- qpca(x,l)
+  x.lm <- lm(y~x.qpca$X)
+})
 
