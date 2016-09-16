@@ -144,164 +144,58 @@ z[x==0] <- 0;plotclust(x,fcclust(z,w=TRUE)$cluster,'GREEDY_wz2')
 
 setwd('C:\\Users\\zhu2\\Documents\\dreamer\\subchallenge1')
 library(data.table)
-library(dplyr)
-d <- 3
+# library(dplyr)
+d <- 1
 x <- fread(dir()[d])
 v1 <- c(x$V1)+1
 v2 <- c(x$V2)+1
 v3 <- c(x$V3)
-for(i in 1:length(v1)){
-  temp <- sort(c(v1[i],v2[i]))
-  v1[i] <- temp[1]
-  v2[i] <- temp[2]
-}
+# for(i in 1:length(v1)){
+#   temp <- sort(c(v1[i],v2[i]))
+#   v1[i] <- temp[1]
+#   v2[i] <- temp[2]
+# }
 v1 <- c(v1,max(v1,v2))
 v2 <- c(v2,max(v1,v2))
 v3 <- c(v3,0)
 x <- slam::simple_triplet_matrix(v1,v2,v3)
-x <- as.matrix(x);dimnames(x) <- list(1:nrow(x),1:nrow(x))
-x <- x+t(x)
-
-############################################################################
-############################################################################
-############################################################################
-
-cbind(x.sub_d,sapply(x.sub,ncol))
-
-#Input
-x.g <- x
-thres <- 0
-w <- T
-layer <- Inf
-print(b.rank <- mat.degree(x.g))
-b.rank <- 2.5
-
-#Setup
-dimnames(x.g) <- list(1:ncol(x.g),1:ncol(x.g))
-
-
-
-
-
-############################################################################
-############################################################################
-############################################################################
-
-
-#Cut the network
-system.time(rlt <- mixclust(x,thres=0,w=TRUE,layer=Inf,lambda=6))
-x.clust <- rlt$cluster
-x.score <- rlt$score; x.score[is.na(x.score)] <- 1
-out <- sapply(unique(x.clust),function(x){paste(names(x.clust)[x.clust==x],collapse = '\t')})
-out <- paste(1:length(out),x.score,out,sep='\t')
-write(out,file=paste0('out_',dir()[d]))
-
-# Check Result
-x.cutnet <-rlt
-x.cutnet[[2]] <- match(x.cutnet[[2]],as.numeric(names(table(x.cutnet[[2]])[order(-table(x.cutnet[[2]]))])))
-head(table(x.cutnet$cluster),20)
-
-tempf2 <- function(x,membership=NULL,main=''){
-  G <- graph_from_adjacency_matrix(x>0)
-  if(is.null(membership)){membership=rep(1,ncol(x))}
-  plot(create.communities(G, membership), 
-       as.undirected(G), 
-       layout=layout.kamada.kawai(as.undirected(G)),
-       main=main,
-       edge.arrow.size=0.01,
-       vertex.size=5,
-       vertex.label.cex=.1)}
-tempf <- function(sel){
-  sel <- x.cutnet$cluster%in%sel
-  xt <- x[sel,sel]
-  ct <- x.cutnet[[2]][sel]
-  tempf2(xt,ct)
-}
-i <- c(1,(2:5)-4)
-par(mfrow=c(3,3))
-for (l in 1:18){i[-1] <- i[-1]+4;tempf(i)}
-for (l in 1:18){plotnet(x[x.cutnet[[2]]==l,x.cutnet[[2]]==l])}
-
-###################################################################
-# Remove ends
-###################################################################
-
-setwd('C:\\Users\\zhu2\\Documents\\dreamer\\subchallenge1')
-library(data.table)
-library(dplyr)
-d <- 3
-x <- fread(dir()[3])
-v1 <- c(x$V1)+1
-v2 <- c(x$V2)+1
-v3 <- c(x$V3)
-for(i in 1:length(v1)){
-  temp <- sort(c(v1[i],v2[i]))
-  v1[i] <- temp[1]
-  v2[i] <- temp[2]
-}
-v1 <- c(v1,max(v1,v2))
-v2 <- c(v2,max(v1,v2))
-v3 <- c(v3,0)
-x <- slam::simple_triplet_matrix(v1,v2,v3)
-x <- as.matrix(x);dimnames(x) <- list(1:nrow(x),1:nrow(x))
+x <- as.matrix(x)
 x.raw <- x <- x+t(x)
 
-#remove one ends
-# while(mean(colSums(x)>1)<1){
-  x <- x[colSums(x)>1,colSums(x)>1]
-# }
-x.end <- x.raw[,!colnames(x.raw)%in%colnames(x)]
-#run Model
-rlt <- mixclust(x,thres=0,w=TRUE,layer=Inf,lambda=6)
-#reconnect ends
-x.clust <- rlt$cluster
-names(x.clust) <- colnames(x)[as.numeric(names(x.clust))]
-
-for (i in 1:ncol(x.end)){
-  print(i)
-  j <- which(x.end[,i]>0)
-  out <- x.clust[which(names(x.clust)==names(j))]
-  names(out) <- colnames(x.end)[i]
-  x.clust <- c(x.clust,out)
-}
-
-
-
-x.clust <- lapply(unique(rlt$cluster),function(i){
-  colnames(x.raw)[as.numeric(names(rlt$cluster))[rlt$cluster==i]]
-})
-x.endlink <- sapply(x.end[1:10],function(x){
-  which(sapply(x.clust,function(y){x%in%y}))
-})
+system.time(rlt <- mixclust(x.raw,thres=0,w=T,b.rank=2.5,layer=Inf,lambda=0.5,maxrank=3))
+sort(table(rlt$cluster))
 
 #Review Result
 x.cutnet <- rlt
+x.cutnet[[1]] <- x.cutnet[[1]][order(-sapply(x.cutnet$subnets,ncol))]
 x.cutnet[[2]] <- match(x.cutnet[[2]],as.numeric(names(table(x.cutnet[[2]])[order(-table(x.cutnet[[2]]))])))
-tempf2 <- function(x,membership=NULL,main=''){
+x.cutnet[[3]] <- sapply(x.cutnet[[1]],mat.degree)
+
+tempf2 <- function(x,membership=NULL,main='',cuts=0){
   G <- graph_from_adjacency_matrix(x>0)
   if(is.null(membership)){membership=rep(1,ncol(x))}
   plot(create.communities(G, membership), 
        as.undirected(G), 
        layout=layout.kamada.kawai(as.undirected(G)),
        main=main,
-       edge.arrow.size=0.01,
-       vertex.size=5,
-       vertex.label.cex=.1)}
+       edge.arrow.size=1,vertex.size=3,vertex.label.cex=.1,edge.width= .1
+       )}
 tempf <- function(sel){
   sel <- x.cutnet$cluster%in%sel
   xt <- x[sel,sel]
   ct <- x.cutnet[[2]][sel]
   tempf2(xt,ct)
 }
-
 head(-sort(-table(rlt$cluster)),10)
-i <- c(1,(2:5)-4)
-par(mfrow=c(3,3))
-for (l in 1:18){
-  i[-1] <- i[-1]+4
-  tempf(i)
-}
-for (l in 1:18){
-  plotnet(x[x.cutnet[[2]]==l,x.cutnet[[2]]==l])
-}
+tempf(2:3)
 
+i <- c(1,2)
+par(mfrow=c(2,2))
+for (l in 1:4){i[-1] <- i[-1]+1;tempf(i)}
+par(mfrow=c(3,3))
+for(l in 1:9){plotnet(x[x.cutnet[[2]]==l,x.cutnet[[2]]==l],.1,5,.1,.1,0)}
+for(l in 1:9){plotnet(x[x.cutnet[[2]]==l,x.cutnet[[2]]==l],.1,5,.1,.1,1)}
+
+out <- sapply(1:length(x.cutnet[[1]]),function(g){paste0(which(x.cutnet$cluster==g),collapse='\t')})
+out <- paste(1:length(x.cutnet[[1]]),min(x.cutnet$score)/x.cutnet$score,out,sep='\t')
+write(out,paste0('out_',dir()[d],'.txt'))
